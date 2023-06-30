@@ -15,14 +15,6 @@ func (m RawMessage) MarshalJSON() ([]byte, error) {
 	return m, nil
 }
 
-// RawJSONBytes is an alternative method used to detect RawMessage without checking the type
-func (m RawMessage) RawJSONBytes() []byte {
-	if m == nil {
-		return []byte("null")
-	}
-	return m
-}
-
 // UnmarshalJSON sets *m to a copy of data.
 func (m *RawMessage) UnmarshalJSON(data []byte) error {
 	if m == nil {
