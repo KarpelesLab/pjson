@@ -23,6 +23,24 @@ type groupResolveState struct {
 
 type GroupResolveFunc func(context.Context, []string) ([]any, error)
 
+type groupCallObj struct {
+	group    string
+	key      string
+	resolver GroupResolveFunc
+}
+
+func GroupCall(group, key string, resolver GroupResolveFunc) GroupMarshaler {
+	return &groupCallObj{group, key, resolver}
+}
+
+func (g *groupCallObj) GroupMarshalerJSON(ctx context.Context, st *GroupState) ([]byte, error) {
+	res, err := st.Fetch(g.group, g.key, g.resolver)
+	if err != nil {
+		return nil, err
+	}
+	return MarshalContext(ctx, res)
+}
+
 // GroupState is a struct holding various state information useful during the
 // current encoding
 type GroupState struct {
