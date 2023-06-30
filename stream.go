@@ -30,7 +30,13 @@ type Decoder struct {
 // The decoder introduces its own buffering and may
 // read data from r beyond the JSON values requested.
 func NewDecoder(r io.Reader) *Decoder {
-	return &Decoder{r: r}
+	return NewDecoderContext(context.Background(), r)
+}
+
+func NewDecoderContext(ctx context.Context, r io.Reader) *Decoder {
+	res := &Decoder{r: r}
+	res.d.ctx = ctx
+	return res
 }
 
 // UseNumber causes the Decoder to unmarshal a number into an interface{} as a
