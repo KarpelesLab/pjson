@@ -3,6 +3,7 @@ package pjson
 import (
 	"context"
 	"errors"
+	"reflect"
 )
 
 // GroupMarshaler is the interface implemented by types that can
@@ -10,7 +11,6 @@ import (
 // and should return data suitable for cases where readyness hasn't been
 // achieved.
 type GroupMarshaler interface {
-	Marshaler
 	GroupMarshalerJSON(ctx context.Context, st *GroupState) ([]byte, error)
 }
 
@@ -26,7 +26,12 @@ type GroupResolveFunc func([]string) ([]any, error)
 // GroupState is a struct holding various state information useful during the
 // current encoding
 type GroupState struct {
-	data map[string]*pendingGroupInfo
+	needRetry int
+	data      map[string]*pendingGroupInfo
+}
+
+func newGroupState() *GroupState {
+	return &GroupState{data: make(map[string]*pendingGroupInfo)}
 }
 
 type pendingGroupInfo struct {
@@ -34,6 +39,28 @@ type pendingGroupInfo struct {
 	err      error
 	pending  map[string]bool
 	resolved map[string]any
+}
+
+// retry will return bool if execution should be retried
+func (g *GroupState) retry() bool {
+	if g == nil {
+		return false
+	}
+	if g.needRetry == 0 {
+		return false
+	}
+	g.needRetry = 0
+	needRetry := false
+	for _, obj := range g.data {
+		if obj.resolve() {
+			needRetry = true
+		}
+	}
+	return needRetry
+}
+
+func (g *GroupState) bumpRetry() {
+	g.needRetry += 1
 }
 
 func (g *GroupState) Fetch(group, key string, resolver GroupResolveFunc) (any, error) {
@@ -56,9 +83,10 @@ func (g *GroupState) Fetch(group, key string, resolver GroupResolveFunc) (any, e
 	return nil, ErrRetryNeeded
 }
 
-func (g *pendingGroupInfo) resolve() {
+// resolve returns true if new stuff has been resolved
+func (g *pendingGroupInfo) resolve() bool {
 	if g.err != nil {
-		return
+		return false
 	}
 	// generate list
 	pendinglst := make([]string, 0, len(g.pending))
@@ -69,7 +97,10 @@ func (g *pendingGroupInfo) resolve() {
 	vals, err := g.fn(pendinglst)
 	if err != nil {
 		g.err = err
-		return
+		return true
+	}
+	if len(vals) == 0 {
+		return false
 	}
 	if len(vals) > len(pendinglst) {
 		// this is not good
@@ -77,5 +108,50 @@ func (g *pendingGroupInfo) resolve() {
 	}
 	for n, v := range vals {
 		g.resolved[pendinglst[n]] = v
+	}
+	return true
+}
+
+// internal encoding methods
+func groupMarshalerEncoder(e *encodeState, v reflect.Value, opts encOpts) {
+	if v.Kind() == reflect.Pointer && v.IsNil() {
+		e.WriteString("null")
+		return
+	}
+	m, ok := v.Interface().(GroupMarshaler)
+	if !ok {
+		e.WriteString("null")
+		return
+	}
+	if e.groupSt == nil {
+		e.groupSt = newGroupState()
+	}
+	b, err := m.GroupMarshalerJSON(e.ctx, e.groupSt)
+	if err == nil {
+		// copy JSON into buffer, checking validity.
+		err = compact(&e.Buffer, b, opts.escapeHTML)
+	}
+	if err != nil {
+		e.error(&MarshalerError{v.Type(), err, "MarshalJSON"})
+	}
+}
+
+func addrGroupMarshalerEncoder(e *encodeState, v reflect.Value, opts encOpts) {
+	va := v.Addr()
+	if va.IsNil() {
+		e.WriteString("null")
+		return
+	}
+	m := va.Interface().(GroupMarshaler)
+	if e.groupSt == nil {
+		e.groupSt = newGroupState()
+	}
+	b, err := m.GroupMarshalerJSON(e.ctx, e.groupSt)
+	if err == nil {
+		// copy JSON into buffer, checking validity.
+		err = compact(&e.Buffer, b, opts.escapeHTML)
+	}
+	if err != nil {
+		e.error(&MarshalerError{v.Type(), err, "MarshalJSON"})
 	}
 }
