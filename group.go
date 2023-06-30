@@ -21,7 +21,7 @@ type groupResolveState struct {
 	err  error
 }
 
-type GroupResolveFunc func([]string) ([]any, error)
+type GroupResolveFunc func(context.Context, []string) ([]any, error)
 
 // GroupState is a struct holding various state information useful during the
 // current encoding
@@ -42,7 +42,7 @@ type pendingGroupInfo struct {
 }
 
 // retry will return bool if execution should be retried
-func (g *GroupState) retry() bool {
+func (g *GroupState) retry(ctx context.Context) bool {
 	if g == nil {
 		return false
 	}
@@ -52,7 +52,7 @@ func (g *GroupState) retry() bool {
 	g.needRetry = 0
 	needRetry := false
 	for _, obj := range g.data {
-		if obj.resolve() {
+		if obj.resolve(ctx) {
 			needRetry = true
 		}
 	}
@@ -84,7 +84,7 @@ func (g *GroupState) Fetch(group, key string, resolver GroupResolveFunc) (any, e
 }
 
 // resolve returns true if new stuff has been resolved
-func (g *pendingGroupInfo) resolve() bool {
+func (g *pendingGroupInfo) resolve(ctx context.Context) bool {
 	if g.err != nil {
 		return false
 	}
@@ -94,7 +94,7 @@ func (g *pendingGroupInfo) resolve() bool {
 		pendinglst = append(pendinglst, k)
 	}
 	g.pending = make(map[string]bool) // TODO use clear(g.pending) with go1.21
-	vals, err := g.fn(pendinglst)
+	vals, err := g.fn(ctx, pendinglst)
 	if err != nil {
 		g.err = err
 		return true

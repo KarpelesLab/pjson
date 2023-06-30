@@ -358,7 +358,7 @@ func (e *encodeState) marshal(v any, opts encOpts) (err error) {
 	for {
 		pos := e.Buffer.Len()
 		e.reflectValue(reflect.ValueOf(v), opts)
-		if !e.groupSt.retry() {
+		if !e.groupSt.retry(e.ctx) {
 			// TODO maybe need a max retry count?
 			break
 		}

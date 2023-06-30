@@ -8,7 +8,7 @@ import (
 	"github.com/KarpelesLab/pjson"
 )
 
-func resolverA(keys []string) ([]any, error) {
+func resolverA(ctx context.Context, keys []string) ([]any, error) {
 	res := make([]any, len(keys))
 
 	for n, k := range keys {
