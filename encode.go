@@ -12,8 +12,10 @@ package pjson
 
 import (
 	"bytes"
+	"context"
 	"encoding"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"math"
 	"reflect"
@@ -156,6 +158,22 @@ import (
 // an error.
 func Marshal(v any) ([]byte, error) {
 	e := newEncodeState()
+	e.ctx = context.Background()
+	defer encodeStatePool.Put(e)
+
+	err := e.marshal(v, encOpts{escapeHTML: true})
+	if err != nil {
+		return nil, err
+	}
+	buf := append([]byte(nil), e.Bytes()...)
+
+	return buf, nil
+}
+
+// MarshalContext is the same as Marshal but with a context
+func MarshalContext(ctx context.Context, v any) ([]byte, error) {
+	e := newEncodeState()
+	e.ctx = ctx
 	defer encodeStatePool.Put(e)
 
 	err := e.marshal(v, encOpts{escapeHTML: true})
@@ -222,6 +240,12 @@ func HTMLEscape(dst *bytes.Buffer, src []byte) {
 // can marshal themselves into valid JSON.
 type Marshaler interface {
 	MarshalJSON() ([]byte, error)
+}
+
+// MarshalerContext is the interface implemented by types that
+// can marshal themselves into valid JSON while requiring a context.
+type MarshalerContext interface {
+	MarshalJSON(ctx context.Context) ([]byte, error)
 }
 
 // An UnsupportedTypeError is returned by Marshal when attempting
@@ -293,6 +317,9 @@ type encodeState struct {
 	// reasonable amount of nested pointers deep.
 	ptrLevel uint
 	ptrSeen  map[any]struct{}
+
+	ctx       context.Context // context, made available for methods using context
+	needRetry int             // if >0, the encoding needs to be retried
 }
 
 const startDetectingCyclesAfter = 1000
@@ -333,6 +360,11 @@ func (e *encodeState) marshal(v any, opts encOpts) (err error) {
 
 // error aborts the encoding by panicking with err wrapped in jsonError.
 func (e *encodeState) error(err error) {
+	if errors.Is(err, ErrRetryNeeded) {
+		// if ErrRetryNeeded, just mark retry needed and do not panic
+		e.needRetry += 1
+		return
+	}
 	panic(jsonError{err})
 }
 
@@ -406,8 +438,10 @@ func typeEncoder(t reflect.Type) encoderFunc {
 }
 
 var (
-	marshalerType     = reflect.TypeOf((*Marshaler)(nil)).Elem()
-	textMarshalerType = reflect.TypeOf((*encoding.TextMarshaler)(nil)).Elem()
+	marshalerType      = reflect.TypeOf((*Marshaler)(nil)).Elem()
+	ctxMarshalerType   = reflect.TypeOf((*MarshalerContext)(nil)).Elem()
+	groupMarshalerType = reflect.TypeOf((*GroupMarshaler)(nil)).Elem()
+	textMarshalerType  = reflect.TypeOf((*encoding.TextMarshaler)(nil)).Elem()
 )
 
 // newTypeEncoder constructs an encoderFunc for a type.
@@ -417,6 +451,12 @@ func newTypeEncoder(t reflect.Type, allowAddr bool) encoderFunc {
 	// Marshaler with a value receiver, then we're better off taking
 	// the address of the value - otherwise we end up with an
 	// allocation as we cast the value to an interface.
+	if t.Kind() != reflect.Pointer && allowAddr && reflect.PointerTo(t).Implements(ctxMarshalerType) {
+		return newCondAddrEncoder(addrCtxMarshalerEncoder, newTypeEncoder(t, false))
+	}
+	if t.Implements(ctxMarshalerType) {
+		return ctxMarshalerEncoder
+	}
 	if t.Kind() != reflect.Pointer && allowAddr && reflect.PointerTo(t).Implements(marshalerType) {
 		return newCondAddrEncoder(addrMarshalerEncoder, newTypeEncoder(t, false))
 	}
@@ -464,6 +504,26 @@ func invalidValueEncoder(e *encodeState, v reflect.Value, _ encOpts) {
 	e.WriteString("null")
 }
 
+func ctxMarshalerEncoder(e *encodeState, v reflect.Value, opts encOpts) {
+	if v.Kind() == reflect.Pointer && v.IsNil() {
+		e.WriteString("null")
+		return
+	}
+	m, ok := v.Interface().(MarshalerContext)
+	if !ok {
+		e.WriteString("null")
+		return
+	}
+	b, err := m.MarshalJSON(e.ctx)
+	if err == nil {
+		// copy JSON into buffer, checking validity.
+		err = compact(&e.Buffer, b, opts.escapeHTML)
+	}
+	if err != nil {
+		e.error(&MarshalerError{v.Type(), err, "MarshalJSON"})
+	}
+}
+
 func marshalerEncoder(e *encodeState, v reflect.Value, opts encOpts) {
 	if v.Kind() == reflect.Pointer && v.IsNil() {
 		e.WriteString("null")
@@ -475,6 +535,23 @@ func marshalerEncoder(e *encodeState, v reflect.Value, opts encOpts) {
 		return
 	}
 	b, err := m.MarshalJSON()
+	if err == nil {
+		// copy JSON into buffer, checking validity.
+		err = compact(&e.Buffer, b, opts.escapeHTML)
+	}
+	if err != nil {
+		e.error(&MarshalerError{v.Type(), err, "MarshalJSON"})
+	}
+}
+
+func addrCtxMarshalerEncoder(e *encodeState, v reflect.Value, opts encOpts) {
+	va := v.Addr()
+	if va.IsNil() {
+		e.WriteString("null")
+		return
+	}
+	m := va.Interface().(MarshalerContext)
+	b, err := m.MarshalJSON(e.ctx)
 	if err == nil {
 		// copy JSON into buffer, checking validity.
 		err = compact(&e.Buffer, b, opts.escapeHTML)
@@ -636,6 +713,7 @@ func stringEncoder(e *encodeState, v reflect.Value, opts encOpts) {
 	}
 	if opts.quoted {
 		e2 := newEncodeState()
+		e2.ctx = e.ctx
 		// Since we encode the string twice, we only need to escape HTML
 		// the first time.
 		e2.string(v.String(), opts.escapeHTML)
