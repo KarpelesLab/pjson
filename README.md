@@ -1,3 +1,5 @@
+[![GoDoc](https://godoc.org/github.com/KarpelesLab/pjson?status.svg)](https://godoc.org/github.com/KarpelesLab/pjson)
+
 # encoding/json fork
 
 This is a fork of `encoding/json` with the following features added:

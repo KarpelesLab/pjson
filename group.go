@@ -1,6 +1,9 @@
 package pjson
 
-import "errors"
+import (
+	"context"
+	"errors"
+)
 
 // GroupMarshaler is the interface implemented by types that can
 // be marshaled as groups. MarshalJSON() also needs to be implemented
@@ -8,7 +11,7 @@ import "errors"
 // achieved.
 type GroupMarshaler interface {
 	Marshaler
-	GroupMarshalerJSON(st *GroupState) ([]byte, error)
+	GroupMarshalerJSON(ctx context.Context, st *GroupState) ([]byte, error)
 }
 
 var ErrRetryNeeded = errors.New("this value needs state resolution before it can be returned") // this error can only be returned by GroupMarshalerJSON

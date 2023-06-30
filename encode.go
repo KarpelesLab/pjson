@@ -245,7 +245,7 @@ type Marshaler interface {
 // MarshalerContext is the interface implemented by types that
 // can marshal themselves into valid JSON while requiring a context.
 type MarshalerContext interface {
-	MarshalJSON(ctx context.Context) ([]byte, error)
+	MarshalContextJSON(ctx context.Context) ([]byte, error)
 }
 
 // An UnsupportedTypeError is returned by Marshal when attempting
@@ -514,7 +514,7 @@ func ctxMarshalerEncoder(e *encodeState, v reflect.Value, opts encOpts) {
 		e.WriteString("null")
 		return
 	}
-	b, err := m.MarshalJSON(e.ctx)
+	b, err := m.MarshalContextJSON(e.ctx)
 	if err == nil {
 		// copy JSON into buffer, checking validity.
 		err = compact(&e.Buffer, b, opts.escapeHTML)
@@ -551,7 +551,7 @@ func addrCtxMarshalerEncoder(e *encodeState, v reflect.Value, opts encOpts) {
 		return
 	}
 	m := va.Interface().(MarshalerContext)
-	b, err := m.MarshalJSON(e.ctx)
+	b, err := m.MarshalContextJSON(e.ctx)
 	if err == nil {
 		// copy JSON into buffer, checking validity.
 		err = compact(&e.Buffer, b, opts.escapeHTML)
