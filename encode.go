@@ -330,6 +330,7 @@ var encodeStatePool sync.Pool
 func newEncodeState() *encodeState {
 	if v := encodeStatePool.Get(); v != nil {
 		e := v.(*encodeState)
+		e.groupSt = nil
 		e.Reset()
 		if len(e.ptrSeen) > 0 {
 			panic("ptrEncoder.encode should have emptied ptrSeen via defers")
