@@ -21,6 +21,13 @@ type objectA struct {
 	key string
 }
 
+type objectB struct {
+	A []any
+	B map[string]any
+	C any
+	D any
+}
+
 func (o *objectA) GroupMarshalerJSON(ctx context.Context, st *pjson.GroupState) ([]byte, error) {
 	v, err := st.Fetch("resolverA", o.key, resolverA)
 	if err != nil {
@@ -37,11 +44,27 @@ func TestGroups(t *testing.T) {
 
 	res, err := pjson.Marshal(tst)
 	if err != nil {
-		t.Errorf("failed to marshal: %s", err)
+		t.Fatalf("failed to marshal: %s", err)
 	}
 	// [,]
 	// ["FOO","BAR"]
 	if string(res) != `["FOO","BAR"]` {
 		t.Errorf("unexpected result, expected [\"FOO\",\"BAR\"] but got %s", res)
+	}
+
+	tst2 := &objectB{
+		A: []any{&objectA{key: "foo"}, "not foo"},
+		B: map[string]any{"key": &objectA{key: "test"}, "a": "b", "z": "x"},
+		C: "hello",
+		D: &objectA{key: "world"},
+	}
+
+	res, err = pjson.Marshal(tst2)
+	if err != nil {
+		t.Fatalf("failed to marshal: %s", err)
+	}
+
+	if string(res) != `{"A":["FOO","not foo"],"B":{"a":"b","key":"TEST","z":"x"},"C":"hello","D":"WORLD"}` {
+		t.Errorf(`unexpected result - expected {"A":["FOO","not foo"],"B":{"a":"b","key":"TEST","z":"x"},"C":"hello","D":"WORLD"} but got: %s`, res)
 	}
 }
