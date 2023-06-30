@@ -26,6 +26,7 @@ type objectB struct {
 	B map[string]any
 	C any
 	D any
+	E any
 }
 
 func (o *objectA) GroupMarshalerJSON(ctx context.Context, st *pjson.GroupState) ([]byte, error) {
@@ -57,6 +58,7 @@ func TestGroups(t *testing.T) {
 		B: map[string]any{"key": &objectA{key: "test"}, "a": "b", "z": "x"},
 		C: "hello",
 		D: &objectA{key: "world"},
+		E: pjson.GroupCall("resolverA", "keyVal", resolverA),
 	}
 
 	res, err = pjson.Marshal(tst2)
@@ -64,7 +66,7 @@ func TestGroups(t *testing.T) {
 		t.Fatalf("failed to marshal: %s", err)
 	}
 
-	if string(res) != `{"A":["FOO","not foo"],"B":{"a":"b","key":"TEST","z":"x"},"C":"hello","D":"WORLD"}` {
-		t.Errorf(`unexpected result - expected {"A":["FOO","not foo"],"B":{"a":"b","key":"TEST","z":"x"},"C":"hello","D":"WORLD"} but got: %s`, res)
+	if string(res) != `{"A":["FOO","not foo"],"B":{"a":"b","key":"TEST","z":"x"},"C":"hello","D":"WORLD","E":"KEYVAL"}` {
+		t.Errorf(`unexpected result - expected {"A":["FOO","not foo"],"B":{"a":"b","key":"TEST","z":"x"},"C":"hello","D":"WORLD","E":"KEYVAL"} but got: %s`, res)
 	}
 }
