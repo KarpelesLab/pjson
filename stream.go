@@ -6,6 +6,7 @@ package pjson
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 )
@@ -186,11 +187,17 @@ type Encoder struct {
 	indentBuf    *bytes.Buffer
 	indentPrefix string
 	indentValue  string
+	ctx          context.Context
 }
 
 // NewEncoder returns a new encoder that writes to w.
 func NewEncoder(w io.Writer) *Encoder {
-	return &Encoder{w: w, escapeHTML: true}
+	return &Encoder{w: w, ctx: context.Background(), escapeHTML: true}
+}
+
+// NewEncoderContext returns a new encoder that writes to w.
+func NewEncoderContext(ctx context.Context, w io.Writer) *Encoder {
+	return &Encoder{w: w, ctx: ctx, escapeHTML: true}
 }
 
 // Encode writes the JSON encoding of v to the stream,
@@ -204,6 +211,7 @@ func (enc *Encoder) Encode(v any) error {
 	}
 
 	e := newEncodeState()
+	e.ctx = enc.ctx
 	defer encodeStatePool.Put(e)
 
 	err := e.marshal(v, encOpts{escapeHTML: enc.escapeHTML})
@@ -254,6 +262,11 @@ func (enc *Encoder) SetIndent(prefix, indent string) {
 // of the output, SetEscapeHTML(false) disables this behavior.
 func (enc *Encoder) SetEscapeHTML(on bool) {
 	enc.escapeHTML = on
+}
+
+// SetContext sets the encoder's context used while encoding values
+func (enc *Encoder) SetContext(ctx context.Context) {
+	enc.ctx = ctx
 }
 
 // RawMessage is a raw encoded JSON value.
