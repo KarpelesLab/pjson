@@ -321,6 +321,7 @@ type encodeState struct {
 	ctx       context.Context // context, made available for methods using context
 	needRetry int             // if >0, the encoding needs to be retried
 	groupSt   *GroupState     // state for group encoding
+	public    bool            // if true, fields marked "protect" will not be exported
 }
 
 const startDetectingCyclesAfter = 1000
@@ -843,6 +844,9 @@ FieldLoop:
 		if f.omitEmpty && isEmptyValue(fv) {
 			continue
 		}
+		if e.public && f.protect {
+			continue
+		}
 		e.WriteByte(next)
 		next = ','
 		if opts.escapeHTML {
@@ -1278,6 +1282,7 @@ type field struct {
 	typ       reflect.Type
 	omitEmpty bool
 	quoted    bool
+	protect   bool
 
 	encoder encoderFunc
 }
@@ -1393,6 +1398,7 @@ func typeFields(t reflect.Type) structFields {
 						typ:       ft,
 						omitEmpty: opts.Contains("omitempty"),
 						quoted:    quoted,
+						protect:   opts.Contains("protect"),
 					}
 					field.nameBytes = []byte(field.name)
 					field.equalFold = foldFunc(field.nameBytes)

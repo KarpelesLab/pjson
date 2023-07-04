@@ -193,6 +193,7 @@ type Encoder struct {
 	indentPrefix string
 	indentValue  string
 	ctx          context.Context
+	public       bool
 }
 
 // NewEncoder returns a new encoder that writes to w.
@@ -217,6 +218,7 @@ func (enc *Encoder) Encode(v any) error {
 
 	e := newEncodeState()
 	e.ctx = enc.ctx
+	e.public = enc.public
 	defer encodeStatePool.Put(e)
 
 	err := e.marshal(v, encOpts{escapeHTML: enc.escapeHTML})
@@ -272,6 +274,11 @@ func (enc *Encoder) SetEscapeHTML(on bool) {
 // SetContext sets the encoder's context used while encoding values
 func (enc *Encoder) SetContext(ctx context.Context) {
 	enc.ctx = ctx
+}
+
+// SetPublic sets the encoder as public, meaning that any protected field will be skipped
+func (enc *Encoder) SetPublic(public bool) {
+	enc.public = public
 }
 
 // A Token holds a value of one of these types:
