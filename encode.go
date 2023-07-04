@@ -158,7 +158,7 @@ import (
 // an error.
 func Marshal(v any) ([]byte, error) {
 	e := newEncodeState()
-	e.ctx = context.Background()
+	e.setContext(context.Background())
 	defer encodeStatePool.Put(e)
 
 	err := e.marshal(v, encOpts{escapeHTML: true})
@@ -173,7 +173,7 @@ func Marshal(v any) ([]byte, error) {
 // MarshalContext is the same as Marshal but with a context
 func MarshalContext(ctx context.Context, v any) ([]byte, error) {
 	e := newEncodeState()
-	e.ctx = ctx
+	e.setContext(ctx)
 	defer encodeStatePool.Put(e)
 
 	err := e.marshal(v, encOpts{escapeHTML: true})
@@ -322,6 +322,13 @@ type encodeState struct {
 	needRetry int             // if >0, the encoding needs to be retried
 	groupSt   *GroupState     // state for group encoding
 	public    bool            // if true, fields marked "protect" will not be exported
+}
+
+func (e *encodeState) setContext(ctx context.Context) {
+	e.ctx = ctx
+	if isPublic(ctx) {
+		e.public = true
+	}
 }
 
 const startDetectingCyclesAfter = 1000
