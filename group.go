@@ -146,8 +146,10 @@ func groupMarshalerEncoder(e *encodeState, v reflect.Value, opts encOpts) {
 	}
 	b, err := m.GroupMarshalerJSON(e.ctx, e.groupSt)
 	if err == nil {
-		// copy JSON into buffer, checking validity.
-		err = compact(&e.Buffer, b, opts.escapeHTML)
+		e.Grow(len(b))
+		out := e.AvailableBuffer()
+		out, err = appendCompact(out, b, opts.escapeHTML)
+		e.Buffer.Write(out)
 	}
 	if err != nil {
 		e.error(&MarshalerError{v.Type(), err, "MarshalJSON"})
@@ -166,8 +168,10 @@ func addrGroupMarshalerEncoder(e *encodeState, v reflect.Value, opts encOpts) {
 	}
 	b, err := m.GroupMarshalerJSON(e.ctx, e.groupSt)
 	if err == nil {
-		// copy JSON into buffer, checking validity.
-		err = compact(&e.Buffer, b, opts.escapeHTML)
+		e.Grow(len(b))
+		out := e.AvailableBuffer()
+		out, err = appendCompact(out, b, opts.escapeHTML)
+		e.Buffer.Write(out)
 	}
 	if err != nil {
 		e.error(&MarshalerError{v.Type(), err, "MarshalJSON"})

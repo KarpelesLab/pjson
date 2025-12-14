@@ -114,7 +114,7 @@ func TestRoundtripStringTag(t *testing.T) {
 				"BoolStr": "false",
 				"IntStr": "0",
 				"UintptrStr": "0",
-				"StrStr": "\"\\u0008\\u000c\\n\\r\\t\\\"\\\\\"",
+				"StrStr": "\"\\b\\f\\n\\r\\t\\\"\\\\\"",
 				"NumberStr": "0"
 			}`,
 		},
@@ -703,7 +703,7 @@ func TestDuplicatedFieldDisappears(t *testing.T) {
 
 func TestStringBytes(t *testing.T) {
 	t.Parallel()
-	// Test that encodeState.stringBytes and encodeState.string use the same encoding.
+	// Test that appendString with string and []byte produce the same encoding.
 	var r []rune
 	for i := '\u0000'; i <= unicode.MaxRune; i++ {
 		if testing.Short() && i > 1000 {
@@ -714,14 +714,9 @@ func TestStringBytes(t *testing.T) {
 	s := string(r) + "\xff\xff\xffhello" // some invalid UTF-8 too
 
 	for _, escapeHTML := range []bool{true, false} {
-		es := &encodeState{}
-		es.string(s, escapeHTML)
+		enc := string(appendString(nil, s, escapeHTML))
+		encBytes := string(appendString(nil, []byte(s), escapeHTML))
 
-		esBytes := &encodeState{}
-		esBytes.stringBytes([]byte(s), escapeHTML)
-
-		enc := es.Buffer.String()
-		encBytes := esBytes.Buffer.String()
 		if enc != encBytes {
 			i := 0
 			for i < len(enc) && i < len(encBytes) && enc[i] == encBytes[i] {
@@ -844,11 +839,11 @@ var encodeStringTests = []struct {
 	{"\x05", `"\u0005"`},
 	{"\x06", `"\u0006"`},
 	{"\x07", `"\u0007"`},
-	{"\x08", `"\u0008"`},
+	{"\x08", `"\b"`},
 	{"\x09", `"\t"`},
 	{"\x0a", `"\n"`},
 	{"\x0b", `"\u000b"`},
-	{"\x0c", `"\u000c"`},
+	{"\x0c", `"\f"`},
 	{"\x0d", `"\r"`},
 	{"\x0e", `"\u000e"`},
 	{"\x0f", `"\u000f"`},
