@@ -111,6 +111,7 @@ func Unmarshal(data []byte, v any) error {
 	}
 
 	d.init(data)
+	d.ctx = context.Background()
 	return d.unmarshal(v)
 }
 
