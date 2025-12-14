@@ -2,7 +2,7 @@
 
 This document tracks all modifications made to the standard Go `encoding/json` library to create the `pjson` package.
 
-**Current upstream version:** Go 1.23.4's encoding/json package (upgraded from Go 1.20.5)
+**Current upstream version:** Go 1.25.5's encoding/json package (upgraded from Go 1.23.4)
 
 ## Summary of Custom Features
 

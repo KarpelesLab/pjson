@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+//go:build !goexperiment.jsonv2
+
 package pjson
 
 import (
@@ -32,15 +34,15 @@ func NewDecoder(r io.Reader) *Decoder {
 	return &Decoder{r: r}
 }
 
-// NewDecoderContext returns a new decoder that reads from r with the given context.
+// NewDecoderContext returns a new decoder that reads from r with context support.
 func NewDecoderContext(ctx context.Context, r io.Reader) *Decoder {
 	dec := &Decoder{r: r}
 	dec.d.ctx = ctx
 	return dec
 }
 
-// UseNumber causes the Decoder to unmarshal a number into an interface{} as a
-// [Number] instead of as a float64.
+// UseNumber causes the Decoder to unmarshal a number into an
+// interface value as a [Number] instead of as a float64.
 func (dec *Decoder) UseNumber() { dec.d.useNumber = true }
 
 // DisallowUnknownFields causes the Decoder to return an error when the destination
@@ -203,21 +205,13 @@ func NewEncoder(w io.Writer) *Encoder {
 	return &Encoder{w: w, escapeHTML: true}
 }
 
-// NewEncoderContext returns a new encoder that writes to w with the given context.
+// NewEncoderContext returns a new encoder that writes to w with context support.
 func NewEncoderContext(ctx context.Context, w io.Writer) *Encoder {
 	enc := &Encoder{w: w, escapeHTML: true, ctx: ctx}
 	if isPublic(ctx) {
 		enc.public = true
 	}
 	return enc
-}
-
-// SetContext sets the context for the encoder.
-func (enc *Encoder) SetContext(ctx context.Context) {
-	enc.ctx = ctx
-	if isPublic(ctx) {
-		enc.public = true
-	}
 }
 
 // Encode writes the JSON encoding of v to the stream,
@@ -234,10 +228,14 @@ func (enc *Encoder) Encode(v any) error {
 	e := newEncodeState()
 	defer encodeStatePool.Put(e)
 
+	// Set context if available
 	if enc.ctx != nil {
 		e.setContext(enc.ctx)
 	}
-	e.public = enc.public
+	if enc.public {
+		e.public = true
+	}
+
 	err := e.marshal(v, encOpts{escapeHTML: enc.escapeHTML})
 	if err != nil {
 		return err
@@ -284,7 +282,13 @@ func (enc *Encoder) SetEscapeHTML(on bool) {
 	enc.escapeHTML = on
 }
 
-// NOTE: RawMessage is defined in raw.go as an alias to json.RawMessage
+// SetContext sets the context for the encoder.
+func (enc *Encoder) SetContext(ctx context.Context) {
+	enc.ctx = ctx
+	if isPublic(ctx) {
+		enc.public = true
+	}
+}
 
 // A Token holds a value of one of these types:
 //
